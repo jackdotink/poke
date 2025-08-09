@@ -1,19 +1,5 @@
 {
-	"emeraldwalk.runonsave": {
-		"autoClearConsole": true,
-		"commands": [
-			{
-				"match": "\\.luau$",
-				"cmd": "cd ${fileDirname};luau-analyze --mode=strict --fflags=true ./${fileBasename}",
-				"showElapsed": true,
-			}
-		]
-	},
-	"[luau]": {
-		"editor.formatOnSave": false,
-	},
-	"luau-lsp.completion.imports.enabled": false,
-	"luau-lsp.platform.type": "standard",
 	"luau-lsp.sourcemap.enabled": false,
+	"luau-lsp.platform.type": "standard",
 	"luau-lsp.fflags.enableNewSolver": true,
 }

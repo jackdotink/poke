@@ -1,51 +1,9 @@
 --- A span in the source code.
 export type Span = vector
 
---- A list of nodes separated by separators, such as `foo, bar, baz`.
-export type Separated<Node, Sep> = { Pair<Node, Sep> }
-
---- A pair of a node and optional separator.
-export type Pair<Node, Sep> = { node: Node, sep: Sep? }
-
---- Delimiters that surround something, such as `(foo)` or `{bar}`.
-export type Delimited<Open, Close> = {
-	--- The opening delimiter.
-	open: Open,
-
-	--- The closing delimiter.
-	close: Close,
-}
-
---- Trivia unimportant to parsing; comments and whitespace.
-export type Trivia = {
-	kind: "comment" | "whitespace",
-
-	--- The span of the trivia in the source code.
-	span: Span,
-
-	--- The text of the trivia.
-	text: string?,
-}
-
---- An Atom; a symbol, keyword, eof, and in some uncommon cases, an identifier
---- that cannot change, like `continue`.
-export type Atom<Kind> = {
-	kind: Kind,
-
-	--- The span of the symbol.
-	span: Span,
-
-	--- The trivia that precedes the symbol.
-	trivia: { Trivia },
-}
-
 --- An identifier, such as `foo` or `bar`.
 export type Identifier = {
-	--- The span of the identifier.
 	span: Span,
-
-	--- The trivia that precedes the identifier.
-	trivia: { Trivia },
 
 	--- The text of the identifier.
 	text: string?,
@@ -53,11 +11,7 @@ export type Identifier = {
 
 --- A number literal, such as `42` or `3.14` or `0xff`.
 export type Number = {
-	--- The span of the number.
 	span: Span,
-
-	--- The trivia that precedes the number.
-	trivia: { Trivia },
 
 	--- The text of the number.
 	text: string?,
@@ -65,11 +19,7 @@ export type Number = {
 
 --- A string literal, such as `"foo"`, `'bar'`, or `[[baz]]`.
 export type String = {
-	--- The span of the string.
 	span: Span,
-
-	--- The trivia that precedes the string.
-	trivia: { Trivia },
 
 	--- The text of the string.
 	text: string?,
@@ -77,11 +27,7 @@ export type String = {
 
 --- An attribute, such as `@foo`.
 export type Attribute = {
-	--- The span of the attribute.
 	span: Span,
-
-	--- The trivia that precedes the attribute.
-	trivia: { Trivia },
 
 	--- The text of the attribute.
 	text: string?,
@@ -91,43 +37,29 @@ export type Attribute = {
 --- it has no exprs, or it could be any part of the string, beginning, middle,
 --- or end.
 export type IString = {
-	--- The span of the segment.
 	span: Span,
-
-	--- The trivia that precedes the segment.
-	trivia: { Trivia },
 
 	--- The text of the segment.
 	text: string?,
 }
 
---- A full CST with a block and eof.
-export type Cst = {
-	--- The block of stats.
-	block: Block,
+--- A full AST.
+export type Chunk = Block
 
-	--- The eof token.
-	eof: Atom<"eof">,
-}
-
---- A block of stats, ending with an optional last stat, such as 
---- `foo(); bar() return baz;`.
+--- A block of stats, ending with an optional last stat, such as
+--- `foo() bar() return baz`.
 export type Block = {
-	--- The stats; `foo();` and `bar()`.
-	stats: Separated<Stat, Atom<";">>,
+	span: Span,
 
-	--- The optional last stat; `return baz;`.
-	last_stat: {
-		--- The last stat; `return baz`.
-		stat: LastStat,
+	--- The stats; `foo()` and `bar()`.
+	stats: { Stat },
 
-		--- The optional semicolon; `;`.
-		semicolon: Atom<";">?,
-	}
+	--- The optional last stat; `return baz`.
+	last_stat: LastStat?,
 }
 
 --- A statement in a block, such as `foo()` or `local foo = bar`.
-export type Stat = 
+export type Stat =
 	| Stat_Assign
 	| Stat_CompoundAssign
 	| Stat_Call
@@ -141,29 +73,29 @@ export type Stat =
 	| Stat_LocalFunction
 	| Stat_LocalVariable
 	| Stat_Type
+	| Stat_TypeFunction
 
---- An assignment stat, such as `foo, bar = baz, qux` or `foo = bar`.
+--- An assignment stat, such as `foo, bar = baz, qux` or `foo.bar = baz`.
 export type Stat_Assign = {
 	kind: "assign",
+	span: Span,
 
 	--- The left of the assignment; `foo, bar`.
-	left: Separated<Var, Atom<",">>,
-
-	--- The equals sign; `=`.
-	equals: Atom<"=">,
+	left: { Var },
 
 	--- The right of the assignment; `baz, qux`.
-	right: Separated<Expr, Atom<",">>,
+	right: { Expr },
 }
 
---- A compound assignment stat, such as `foo += bar`.
+--- A compound assignment stat, such as `foo += bar` or `foo[bar] -= baz`.
 export type Stat_CompoundAssign = {
 	kind: "compoundassign",
+	span: Span,
 
 	--- The left side of the assignment; `foo`.
 	left: Var,
 
-	--- The compound operator; `+=` .
+	--- The operator of the assignment; `+=`.
 	operator: CompoundOperator,
 
 	--- The right side of the assignment; `bar`.
@@ -171,19 +103,15 @@ export type Stat_CompoundAssign = {
 }
 
 --- A compound operator.
-export type CompoundOperator = 
-	| Atom<"+=">
-	| Atom<"-=">
-	| Atom<"*=">
-	| Atom<"/=">
-	| Atom<"//=">
-	| Atom<"%=">
-	| Atom<"^=">
-	| Atom<"..=">
+export type CompoundOperator = {
+	kind: "+=" | "-=" | "*=" | "/=" | "//=" | "%=" | "^=" | "..=",
+	span: Span,
+}
 
---- A function call stat, such as `foo.bar()` or `baz()`.
+--- A function call stat, such as `foo.bar:baz()` or `foo()`.
 export type Stat_Call = {
 	kind: "call",
+	span: Span,
 
 	--- A var ending with a call suffix.
 	--- 
@@ -195,85 +123,55 @@ export type Stat_Call = {
 --- A do stat, such as `do foo() end`.
 export type Stat_Do = {
 	kind: "do",
-	
-	--- The `do` token.
-	do_tok: Atom<"do">,
+	span: Span,
+
+	--- The inner block; `foo()`.
+	block: Block,
+}
+
+--- A while stat, such as `while foo() do bar() end`.
+export type Stat_While = {
+	kind: "while",
+	span: Span,
+
+	--- The condition; `foo()`.
+	condition: Expr,
+
+	--- The inner block; `bar()`.
+	block: Block,
+}
+
+--- A repeat stat, such as `repeat foo() until bar()`.
+export type Stat_Repeat = {
+	kind: "repeat",
+	span: Span,
 
 	--- The inner block; `foo()`.
 	block: Block,
 
-	--- The `end` token.
-	end_tok: Atom<"end">,
-}
-
---- A while stat, such as `while foo do bar() end`.
-export type Stat_While = {
-	kind: "while",
-
-	--- The `while` token.
-	while_tok: Atom<"while">,
-
-	--- The condition; `foo`.
-	condition: Expr,
-
-	--- The `do` token.
-	do_tok: Atom<"do">,
-
-	--- The block; `bar()`.
-	block: Block,
-
-	--- The `end` token.
-	end_tok: Atom<"end">,
-}
-
---- A repeat stat, such as `repeat foo() until bar`.
-export type Stat_Repeat = {
-	kind: "repeat",
-
-	--- The `repeat` token.
-	repeat_tok: Atom<"repeat">,
-	
-	--- The block; `foo()`.
-	block: Block,
-
-	--- The `until` token.
-	until_tok: Atom<"until">,
-
-	--- The condition; `bar`.
+	--- The condition; `bar()`.
 	condition: Expr,
 }
 
 --- An if stat, such as
---- `if foo then bar() elseif baz then qux() else quz() end`.
+--- `if foo() then bar() elseif baz() then qux() else quz() end`.
 export type Stat_If = {
 	kind: "if",
-
-	--- The `if` token.
-	if_tok: Atom<"if">,
+	span: Span,
 
 	--- The branches; `foo then bar() elseif baz then qux()`.
-	branches: Separated<IfStatBranch, Atom<"elseif">>,
+	branches: { IfStatBranch },
 
 	--- The optional else branch; `else quz()`.
-	else_branch: {
-		--- The `else` token.
-		else_tok: Atom<"else">,
-
-		--- The else branch block; `quz()`.
-		block: Block,
-	}?,
-
-	--- The `end` token.
-	end_tok: Atom<"end">,
+	else_block: Block?,
 }
 
---- A branch in an if stat, such as `foo then bar()`
+--- A branch in an if stat, such as `foo then bar()`.
 export type IfStatBranch = {
+	span: Span,
+
 	--- The condition; `foo`.
 	condition: Expr,
-
-	--- The `then` token.
-	then_tok: Atom<"then">,
 
 	--- The block; `bar()`.
 	block: Block,
@@ -282,93 +180,54 @@ export type IfStatBranch = {
 --- A numeric for loop stat, such as `for foo = 1, 2, 3 do bar() end`.
 export type Stat_NumericFor = {
 	kind: "numericfor",
-
-	--- The `for` token.
-	for_tok: Atom<"for">,
+	span: Span,
 
 	--- The binding; `foo`.
 	binding: Binding,
 
-	--- The equals token; `=`.
-	equals: Atom<"=">,
-
 	--- The start expr; `1`.
 	start_expr: Expr,
-
-	--- The comma between the start and end; `,`.
-	comma: Atom<",">,
 
 	--- The end expr; `2`.
 	end_expr: Expr,
 
-	--- The optional step; `, 3`.
-	step: {
-		--- The comma between the end and step; `,`.
-		comma: Atom<",">,
-
-		--- The step expr; `3`.
-		expr: Expr,
-	}?,
-
-	--- The `do` token.
-	do_tok: Atom<"do">,
+	--- The optional step expr; `3`.
+	step_expr: Expr?,
 
 	--- The block; `bar()`.
 	block: Block,
-
-	--- The `end` token.
-	end_tok: Atom<"end">,
 }
 
 --- A generic for loop stat, such as
 --- `for foo: bar, baz in qux, quz do quv() end`.
 export type Stat_GenericFor = {
 	kind: "genericfor",
-
-	--- The `for` token.
-	for_tok: Atom<"for">,
+	span: Span,
 
 	--- The bindings; `foo: bar, baz`.
-	bindings: Separated<Binding, Atom<",">>,
-
-	--- The `in` token.
-	in_tok: Atom<"in">,
+	bindings: { Binding },
 
 	--- The exprs; `qux, quz`.
-	exprs: Separated<Expr, Atom<",">>,
-
-	--- The `do` token.
-	do_tok: Atom<"do">,
+	exprs: { Expr },
 
 	--- The block; `quv()`.
 	block: Block,
-
-	--- The `end` token.
-	end_tok: Atom<"end">,
 }
 
 --- A function decl stat, such as
 --- `@native function foo.bar:baz() return 1 end`.
 export type Stat_Function = {
 	kind: "function",
-	
+	span: Span,
+
 	--- The attributes; `@native`.
 	attributes: { Attribute },
 
-	--- The `function` token.
-	function_tok: Atom<"function">,
-
 	--- The name; `foo.bar`.
-	names: Separated<Identifier, Atom<".">>,
+	names: { Identifier },
 
 	--- The optional method; `:baz`.
-	method: {
-		--- The colon; `:`.
-		colon: Atom<":">,
-		
-		--- The method name; `baz`.
-		name: Identifier,
-	}?,
+	method: Identifier?,
 
 	--- The function body; `() return 1 end`.
 	body: FunctionBody,
@@ -378,15 +237,10 @@ export type Stat_Function = {
 --- `@native local function foo() return 1 end`.
 export type Stat_LocalFunction = {
 	kind: "localfunction",
-	
+	span: Span,
+
 	--- The attributes; `@native`.
 	attributes: { Attribute },
-
-	--- The `local` token.
-	local_tok: Atom<"local">,
-
-	--- The `function` token.
-	function_tok: Atom<"function">,
 
 	--- The name; `foo`.
 	name: Identifier,
@@ -398,32 +252,22 @@ export type Stat_LocalFunction = {
 --- A local variable stat, such as `local foo: bar, baz = qux, quz, quv`.
 export type Stat_LocalVariable = {
 	kind: "localvariable",
-
-	--- The `local` token.
-	local_tok: Atom<"local">,
+	span: Span,
 
 	--- The bindings; `foo: bar, baz`.
-	bindings: Separated<Binding, Atom<",">>,
+	bindings: { Binding },
 
-	--- The optional values; `= qux, quz, quv`.
-	values: {
-		--- The equals; `=`.
-		equals: Atom<"=">,
-
-		--- The exprs; `qux, quz, quv`.
-		exprs: Separated<Expr, Atom<",">>,
-	}?,
+	--- The optional exprs; `qux, quz, quv`.
+	exprs: { Expr }?,
 }
 
 --- A type decl stat, such as `export type foo<bar> = baz`.
 export type Stat_Type = {
 	kind: "type",
+	span: Span,
 
-	--- The optional `export` token.
-	export_tok: Atom<"export">?,
-
-	--- The `type` token.
-	type_tok: Atom<"type">,
+	--- The optional export; `export`.
+	export: boolean,
 
 	--- The name of the type; `foo`.
 	name: Identifier,
@@ -431,11 +275,24 @@ export type Stat_Type = {
 	--- The optional generic decl; `<bar>`.
 	generics: GenericDeclWithDefaults?,
 
-	--- The equals token; `=`.
-	equals: Atom<"=">,
-
 	--- The type; `baz`.
 	type: Type,
+}
+
+--- A type function decl stat, such as `export type function foo(bar) return
+--- types.number end`.
+export type Stat_TypeFunction = {
+	kind: "typefunction",
+	span: Span,
+
+	--- The optional export; `export`.
+	export: boolean,
+
+	--- The name of the type function; `foo`.
+	name: Identifier,
+
+	--- The function body of the type function; `(bar) return types.number end`.
+	body: FunctionBody,
 }
 
 --- The last statement in a block, such as `return`, `break`, or `continue`.
@@ -444,33 +301,29 @@ export type LastStat = LastStat_Return | LastStat_Break | LastStat_Continue
 --- A return last stat, such as `return foo, bar, baz` or `return`.
 export type LastStat_Return = {
 	kind: "return",
+	span: Span,
 
-	--- The `return` token.
-	return_tok: Atom<"return">,
-
-	--- The returned exprs; `foo, bar, baz`.
-	exprs: Separated<Expr, Atom<",">>,
+	--- The optional exprs; `foo, bar, baz`.
+	exprs: { Expr },
 }
 
---- A `break` last stat.
+--- A break last stat, such as `break`.
 export type LastStat_Break = {
 	kind: "break",
-	
-	--- The `break` token.
-	tok: Atom<"break">,
+	span: Span,
 }
 
---- A `continue` last stat.
+--- A continue last stat, such as `continue`.
 export type LastStat_Continue = {
 	kind: "continue",
-
-	--- The `continue` token.
-	tok: Atom<"continue">,
+	span: Span,
 }
 
 --- A variable, such as `foo` or `foo.bar` or `(foo + bar):baz()` or `foo[bar]`.
 export type Var = {
-	--- The root of the variable; `foo`.
+	span: Span,
+
+	--- The root of the variable; `foo` and `(foo + bar)`.
 	root: VarRoot,
 
 	--- The suffixes of the variable; `.bar` and `:baz()` and `[bar]`.
@@ -483,19 +336,18 @@ export type VarRoot = VarRoot_Name | VarRoot_Paren
 --- A name as a variable, such as `foo`.
 export type VarRoot_Name = {
 	kind: "name",
+	span: Span,
 
-	--- The name token.
+	--- The name.
 	name: Identifier,
 }
 
 --- A parenthesized expr, such as `(foo)` or `(bar + baz)`.
 export type VarRoot_Paren = {
 	kind: "paren",
+	span: Span,
 
-	--- The parens surrounding the expr; `(` and `)`.
-	parens: Delimited<Atom<"(">, Atom<")">>,
-
-	--- The expr; `foo`.
+	--- The expr.
 	expr: Expr,
 }
 
@@ -505,70 +357,31 @@ export type VarSuffix = VarSuffix_Name | VarSuffix_Expr | VarSuffix_Call
 --- A named index, such as `root.foo`.
 export type VarSuffix_Name = {
 	kind: "name",
+	span: Span,
 
-	--- The dot; `.`.
-	dot: Atom<"">,
-
-	--- The name; `foo`.
+	--- The name.
 	name: Identifier,
 }
 
 --- An expr index, such as `root[foo]`.
 export type VarSuffix_Expr = {
 	kind: "expr",
+	span: Span,
 
-	--- The brackets surrounding the expr; `[` and `]`.
-	bracks: Delimited<Atom<"[">, Atom<"]">>,
-
-	--- The expr; `foo`.
+	--- The expr.
 	expr: Expr,
 }
 
 --- A call, such as `root:method(foo)` or `root()`.
 export type VarSuffix_Call = {
 	kind: "call",
+	span: Span,
 
 	--- The optional method; `:method`.
-	method: {
-		--- The colon; `:`.
-		colon: Atom<":">,
+	method: Identifier?,
 
-		--- The name; `method`.
-		name: Identifier,
-	}?,
-
-	--- The argument; `(foo)`.
-	arg: FunctionArg,
-}
-
---- An argument to a call, such as `(foo, bar)` or `()` or `"baz"`.
-export type FunctionArg = FunctionArg_Pack | FunctionArg_Table | FunctionArg_String
-
---- Pack argument to a call, such as `(foo, bar)` or `()`.
-export type FunctionArg_Pack = {
-	kind: "pack",
-
-	--- The parens surrounding the pack; `(` and `)`.
-	parens: Delimited<Atom<"(">, Atom<")">>,
-
-	--- The exprs; `foo, bar`.
-	exprs: Separated<Expr, Atom<",">>,
-}
-
---- Table argument to a call, such as `{ foo = bar }` or `{}`.
-export type FunctionArg_Table = {
-	kind: "table",
-
-	--- The table literal.
-	table: Table,
-}
-
---- String argument to a call, such as `"foo"` or `'bar'`.
-export type FunctionArg_String = {
-	kind: "string",
-
-	--- The string token.
-	token: String,
+	--- The arguments; `(foo)`.
+	args: { Expr },
 }
 
 --- An expression, such as `nil` or `foo + bar` or `if foo then bar else baz`.
@@ -591,46 +404,46 @@ export type Expr =
 --- The literal expr `nil`.
 export type Expr_Nil = {
 	kind: "nil",
-
-	--- The `nil` token.
-	token: Atom<"nil">,
+	span: Span,
 }
 
 --- The literal expr `true` or `false`.
 export type Expr_Boolean = {
 	kind: "boolean",
+	span: Span,
 
-	--- The `true` or `false` token.
-	token: Atom<"true"> | Atom<"false">,
+	--- The value.
+	value: boolean,
 }
 
 --- A number literal expr, such as `42` or `3.14` or `0xff`.
 export type Expr_Number = {
 	kind: "number",
+	span: Span,
 
-	--- The number token.
-	token: Number,
+	--- The number.
+	number: Number,
 }
 
 --- A string literal expr, such as `"foo"` or `'bar'` or `[[baz]]`.
 export type Expr_String = {
 	kind: "string",
+	span: Span,
 
-	--- The string token.
-	token: String,
+	--- The string.
+	string: String,
 }
 
 --- The literal expr `...`.
 export type Expr_Vararg = {
 	kind: "vararg",
-
-	--- The `...` token.
-	token: Atom<"...">,
+	span: Span,
 }
 
 --- A simple interpolated string expr, such as `'foo bar baz'`.
 export type Expr_SimpleIString = {
-	kind: "simple_istring",
+	kind: "simpleistring",
+	span: Span,
 
 	--- The string.
 	string: IString,
@@ -638,18 +451,20 @@ export type Expr_SimpleIString = {
 
 --- A complex interpolated string expr, such as `'foo {bar} baz {qux} quz'`.
 export type Expr_ComplexIString = {
-	kind: "complex_istring",
+	kind: "complexistring",
+	span: Span,
 
-	--- The first segment; `'foo {`.
-	first: IString,
+	--- The istring segements; `'foo {'` and `} baz {` and `} quz'`.
+	segments: { IString },
 
-	--- The remaining exprs and istring segments; `bar} baz {qux} quz'`.
-	rest: Separated<Expr, IString>,
+	--- The exprs; `bar` and `qux`.
+	exprs: { Expr },
 }
 
---- A table literal expr, such as `{ foo = bar }`.
+--- A table literal expr, such as `{ foo = bar }` or `{}`.
 export type Expr_Table = {
 	kind: "table",
+	span: Span,
 
 	--- The table literal.
 	table: Table,
@@ -659,13 +474,11 @@ export type Expr_Table = {
 --- `@native function(foo, bar) return foo + bar end`.
 export type Expr_Function = {
 	kind: "function",
-	
-	--- The function attributes; `@native`.
+	span: Span,
+
+	--- The attributes; `@native`.
 	attributes: { Attribute },
 
-	--- The `function` token; `function`.
-	function_tok: Atom<"function">,
-	
 	--- The function body; `(foo, bar) return foo + bar end`.
 	body: FunctionBody,
 }
@@ -673,28 +486,22 @@ export type Expr_Function = {
 --- An if-else expr, such as `if foo then bar elseif baz then qux else quz`.
 export type Expr_IfElse = {
 	kind: "ifelse",
+	span: Span,
 
-	--- The `if` token; `if`.
-	if_tok: Atom<"if">,
+	--- The branches; `foo the bar elseif baz then qux`.
+	branches: { IfElseExprBranch },
 
-	--- The branches separated by `elseif`; `foo then bar elseif baz then qux`.
-	branches: Separated<IfElseExprBranch, Atom<"elseif">>,
-
-	--- The `else` token; `else`.
-	else_tok: Atom<"else">,
-
-	--- The `else` body; `quz`.
+	--- The `else` body; `else quz`.
 	else_body: Expr,
 }
 
 --- A branch of an if-else expr, such as `foo then bar`.
 export type IfElseExprBranch = {
+	span: Span,
+
 	--- The condition; `foo`.
 	condition: Expr,
 
-	--- The `then` token; `then`.
-	then_tok: Atom<"then">,
-	
 	--- The body; `bar`.
 	body: Expr,
 }
@@ -702,6 +509,7 @@ export type IfElseExprBranch = {
 --- A var expr, such as `foo.bar[baz]()` or `(foo + bar)`.
 export type Expr_Var = {
 	kind: "var",
+	span: Span,
 
 	--- The var.
 	var: Var,
@@ -710,12 +518,10 @@ export type Expr_Var = {
 --- A type assertion expr, such as `foo :: bar`.
 export type Expr_Assertion = {
 	kind: "assertion",
+	span: Span,
 
 	--- The expr; `foo`.
 	expr: Expr,
-
-	--- The colons; `::`
-	colons: Atom<"::">,
 
 	--- The type; `bar`.
 	type: Type,
@@ -724,28 +530,30 @@ export type Expr_Assertion = {
 --- An unary expr, such as `-foo` or `not bar`.
 export type Expr_Unary = {
 	kind: "unary",
+	span: Span,
 
-	--- The operator; `-`
+	--- The operator; `-`.
 	operator: UnaryOperator,
 
-	--- The expr; `foo`
+	--- The expr; `foo`.
 	expr: Expr,
 }
 
 --- An unary operator.
-export type UnaryOperator = 
-	| Atom<"-">
-	| Atom<"not">
-	| Atom<"#">
+export type UnaryOperator = {
+	kind: "-" | "not" | "#",
+	span: Span,
+}
 
 --- A binary expr, such as `foo + bar` or `baz or qux`.
 export type Expr_Binary = {
 	kind: "binary",
+	span: Span,
 
 	--- The left expr; `foo`.
 	left: Expr,
 
-	--- The operator; `+`
+	--- The operator; `+`.
 	operator: BinaryOperator,
 
 	--- The right expr; `bar`.
@@ -753,88 +561,68 @@ export type Expr_Binary = {
 }
 
 --- A binary operator.
-export type BinaryOperator = 
-	| Atom<"+">
-	| Atom<"-">
-	| Atom<"*">
-	| Atom<"/">
-	| Atom<"//">
-	| Atom<"%">
-	| Atom<"^">
-	| Atom<"..">
-	| Atom<"<">
-	| Atom<"<=">
-	| Atom<">">
-	| Atom<">=">
-	| Atom<"==">
-	| Atom<"~=">
-	| Atom<"and">
-	| Atom<"or">
+export type BinaryOperator = {
+	kind: "+"
+		| "-"
+		| "*"
+		| "/"
+		| "//"
+		| "%"
+		| "^"
+		| ".."
+		| "<"
+		| "<="
+		| ">"
+		| ">="
+		| "=="
+		| "~="
+		| "and"
+		| "or",
+	span: Span,
+}
 
 --- A function body, such as `<T>(foo: T, ...: bar): baz return 10 end`.
 export type FunctionBody = {
+	span: Span,
+
 	--- The optional generic decl; `<T>`.
 	generics: GenericDecl?,
 
-	--- The parentheses surrounding the parameters; `(` and `)`.
-	parens: Delimited<Atom<"(">, Atom<")">>,
-
-	--- The parameters; `foo: T,`.
-	params: Separated<Binding, Atom<",">>,
+	--- The parameters; `foo: T`.
+	params: { Binding },
 
 	--- The optional varargs; `...: bar`.
 	varargs: {
-		--- The dots; `...`.
-		dots: Atom<"...">,
+		span: Span,
 
 		--- The optional type; `: bar`.
-		type: {
-			--- The colon; `:`.
-			colon: Atom<":">,
-
-			--- The type; `bar`.
-			type: Type | GenericTypePack,
-		}?,
+		type: (Type | GenericTypePack)?,
 	}?,
 
 	--- The optional return type; `: baz`.
-	ret: {
-		--- The colon; `:`.
-		colon: Atom<":">,
-
-		--- The type; `baz`.
-		type: ReturnType,
-	}?,
+	ret: ReturnType?,
 
 	--- The block; `return 10`.
 	block: Block,
-
-	--- The `end` token.
-	end_tok: Atom<"end">,
 }
 
 --- A binding, such as `foo: bar` or `foo`.
 export type Binding = {
+	span: Span,
+
 	--- The name of the binding; `foo`.
 	name: Identifier,
 
 	--- The optional type; `: bar`.
-	type: {
-		--- The colon; `:`.
-		colon: Atom<":">,
-
-		--- The type; `bar`.
-		type: Type,
-	}?,
+	type: Type?,
 }
 
 --- A table literal, such as `{ foo = bar }`.
 export type Table = {
-	--- The braces surrounding the fields; `{` and `}`.
-	braces: Delimited<Atom<"{">, Atom<"}">>,
+	span: Span,
 
 	--- The fields; `foo = bar`.
-	fields: Separated<TableField, Atom<","> | Atom<";">>,
+	fields: { TableField },
 }
 
 --- A table field, such as `foo = bar` or `[baz] = qux` or `quz`.
@@ -846,13 +634,11 @@ export type TableField =
 --- A table field with a name key, such as `foo = bar`.
 export type TableField_NameKey = {
 	kind: "namekey",
+	span: Span,
 
 	--- The name; `foo`.
 	name: Identifier,
-
-	--- The equals; `=`.
-	equals: Atom<"=">,
-
+	
 	--- The value; `bar`.
 	value: Expr,
 }
@@ -860,16 +646,11 @@ export type TableField_NameKey = {
 --- A table field with an expr key, such as `[foo] = bar`.
 export type TableField_ExprKey = {
 	kind: "exprkey",
-
-	--- The brackets surrounding the key; `[` and `]`.
-	bracks: Delimited<Atom<"[">, Atom<"]">>,
+	span: Span,
 
 	--- The key; `foo`.
 	key: Expr,
-
-	--- The equals; `=`.
-	equals: Atom<"=">,
-
+	
 	--- The value; `bar`.
 	value: Expr,
 }
@@ -877,79 +658,57 @@ export type TableField_ExprKey = {
 --- A table field with no key, such as `foo`.
 export type TableField_NoKey = {
 	kind: "nokey",
+	span: Span,
 
 	--- The value; `foo`.
 	value: Expr,
 }
 
---- A generic decl without default types; `<A, B, C...>`.
+--- A generic decl without default types, such as `<A, B, C...>`.
 export type GenericDecl = {
-	--- The angles surrounding the generic decl; `<` and `>`.
-	angles: Delimited<Atom<"<">, Atom<">">>,
+	span: Span,
 
 	--- The names in the generic decl; `A, B,`.
-	names: Separated<Identifier, Atom<",">>,
+	names: { Identifier },
 
-	--- The packs in the generic decl; `C...`.
-	packs: Separated<{
-		--- The name; `C`.
-		name: Identifier,
-	
-		--- The trailing dots; `...`.
-		dots: Atom<"...">,
-	}, Atom<",">>,
+	--- The names of the packs in the generic decl; `C...`.
+	packs: { Identifier },
 }
 
---- A generic decl with optional default types;
+--- A generic decl with optional default types, such as
 --- `<A, B = number, C... = ...string>`.
 export type GenericDeclWithDefaults = {
-	--- The angles surrounding the generic decl; `<` and `>`.
-	angles: Delimited<Atom<"<">, Atom<">">>,
+	span: Span,
 
-	--- The names without defaults in the decl; `A,`.
-	names_without_defaults: Separated<Identifier, Atom<",">>,
+	--- The names without defaults; `A`
+	names_without_defaults: { Identifier },
 
-	--- The names with defaults in the decl; `B = number,`.
-	names_with_defaults: Separated<{
-		--- The name; `B`.
+	--- The names with defaults; `B = number`
+	names_with_defaults: {{
+		--- The name; `B`
 		name: Identifier,
-	
-		--- The equals sign; `=`.
-		equals: Atom<"=">,
-	
-		--- The default type; `number`.
-		default: Type,
-	}, Atom<",">>,
 
-	--- The packs without defaults in the decl; `foo...`.
+		--- The default type; `number`
+		default: Type,
+	}},
+
+	--- The packs without defaults; `foo...`.
 	--- 
 	--- These can only exist if there are no nodes in `names_with_defaults`.
-	packs_without_defaults: Separated<{
-		--- The name; `foo`.
-		name: Identifier,
-	
-		--- The trailing dots; `...`.
-		dots: Atom<"...">,
-	}, Atom<",">>,
+	packs_without_defaults: { Identifier },
 
 	--- The packs with defaults in the decl; `C... = ...string`.
-	packs_with_defaults: Separated<{
-		--- The name; `C`.
+	packs_with_defaults: {{
+		--- The pack name; `C...`
 		name: Identifier,
-	
-		--- The trailing dots; `...`.
-		dots: Atom<"...">,
-	
-		--- The equals sign; `=`.
-		equals: Atom<"=">,
-	
-		--- The default type pack; `...string`.
+
+		--- The default type pack; `...string`
 		default: TypePack,
-	}, Atom<",">>,
+	}},
 }
 
 --- A return type, such as `foo` or `...bar`.
-export type ReturnType = Type | TailType
+export type ReturnType = Type | TypePack
 
 --- A type pack, such as `...foo` or `foo...` or `(foo, bar, baz...)`.
 export type TypePack = VariadicTypePack | GenericTypePack | ListTypePack
@@ -957,12 +716,10 @@ export type TypePack = VariadicTypePack | GenericTypePack | ListTypePack
 --- A list type pack, such as `(foo, bar, baz...)`.
 export type ListTypePack = {
 	kind: "list",
+	span: Span,
 
-	--- The parentheses surrounding the types; `(` and `)`.
-	parens: Delimited<Atom<"(">, Atom<")">>,
-
-	--- The types; `foo, bar,`.
-	types: Separated<Type, Atom<",">>,
+	--- The types; `foo, bar`.
+	types: { Type },
 
 	--- The optional tail type; `baz...`.
 	tail: TailType?,
@@ -974,20 +731,16 @@ export type TailType = VariadicTypePack | GenericTypePack
 --- A generic type pack, such as `foo...`.
 export type GenericTypePack = {
 	kind: "generic",
+	span: Span,
 
 	--- The name; `foo`.
 	name: Identifier,
-
-	--- The dots; `...`.
-	dots: Atom<"...">,
 }
 
 --- A variadic type pack, such as `...foo`.
 export type VariadicTypePack = {
 	kind: "variadic",
-
-	--- The dots; `...`.
-	dots: Atom<"...">,
+	span: Span,
 
 	--- The type; `foo`.
 	type: Type,
@@ -998,7 +751,7 @@ export type Type =
 	| Type_Nil
 	| Type_Boolean
 	| Type_String
-	| Type_Reference
+	| Type_Name
 	| Type_Typeof
 	| Type_Array
 	| Type_Table
@@ -1011,51 +764,40 @@ export type Type =
 --- The literal type `nil`.
 export type Type_Nil = {
 	kind: "nil",
-
-	--- The `nil` token.
-	token: Atom<"nil">,
+	span: Span,
 }
 
 --- The literal type `true` or `false`.
 export type Type_Boolean = {
 	kind: "boolean",
+	span: Span,
 
-	--- The `true` or `false` token.
-	token: Atom<"true"> | Atom<"false">,
+	--- The value.
+	value: boolean,
 }
 
 --- A string literal type, such as `"foo"` or `'bar'`.
 export type Type_String = {
 	kind: "string",
+	span: Span,
 
-	--- The string token.
-	token: String,
+	--- The string.
+	string: String,
 }
 
---- A reference type, such as `foo` or `foo<bar>` or `foo.bar<baz>`.
-export type Type_Reference = {
-	kind: "reference",
+--- A name type, such as `foo` or `foo<bar>` or `foo.bar<baz>`.
+export type Type_Name = {
+	kind: "name",
+	span: Span,
 
 	--- The optional prefix; `foo.`.
-	prefix: {
-		--- The name; `foo`
-		name: Identifier,
-
-		--- The dot; `.`
-		dot: Atom<".">,
-	}?,
+	prefix: Identifier?,
 
 	--- The name; `bar`.
 	name: Identifier,
 
-	--- The optional generics; `<baz>`.
-	generics: {
-		--- The angles; `<` and `>`.
-		angles: Delimited<Atom<"<">, Atom<">">>,
-
-		--- The generic types; `baz`.
-		types: Separated<TypeArg, Atom<",">>,
-	}?,
+	--- The optional generic arguments; `<baz>`.
+	generics: { TypeArg }?,
 }
 
 --- An argument to a type, such as `foo` or `...bar` or `baz...`.
@@ -1064,12 +806,7 @@ export type TypeArg = Type | TypePack
 --- A typeof type, such as `typeof(foo)`.
 export type Type_Typeof = {
 	kind: "typeof",
-
-	--- The typeof token.
-	typeof_tok: Atom<"typeof">,
-
-	--- The parentheses surrounding the expr; `(` and `)`.
-	parens: Delimited<Atom<"(">, Atom<")">>,
+	span: Span,
 
 	--- The expr; `foo`.
 	expr: Expr,
@@ -1078,9 +815,7 @@ export type Type_Typeof = {
 --- An array type, such as `{ foo }`.
 export type Type_Array = {
 	kind: "array",
-
-	--- The braces surrounding the type; `{` and `}`.
-	braces: Delimited<Atom<"{">, Atom<"}">>,
+	span: Span,
 
 	--- The type; `foo`.
 	type: Type,
@@ -1089,54 +824,45 @@ export type Type_Array = {
 --- A table type, such as `{ foo: bar, ["baz"]: number, [number]: string }`.
 export type Type_Table = {
 	kind: "table",
-
-	--- The braces surrounding the fields; `{` and `}`.
-	braces: Delimited<Atom<"{">, Atom<"}">>,
+	span: Span,
 
 	--- The fields; `foo: bar` and `["baz"]: number` and `[number]: string`.
-	fields: Separated<TableTypeField, Atom<","> | Atom<";">>,
+	fields: { TableTypeField },
 }
 
 --- A table type field, such as `foo: bar` or `["foo"]: bar` or
 --- `write [number]: string`.
 export type TableTypeField =
-	| TableTypeField_NameProp
-	| TableTypeField_StringProp
+	| TableTypeField_Name
+	| TableTypeField_String
 	| TableTypeField_Indexer
 
 --- A table type field with a name key, such as `read foo: bar` or
 --- `baz: number`.
-export type TableTypeField_NameProp = {
-	kind: "nameprop",
+export type TableTypeField_Name = {
+	kind: "name",
+	span: Span,
 
 	--- The optional access modifier; `read`.
-	access: (Atom<"read"> | Atom<"write">)?,
+	access: ("read" | "write")?,
 
-	--- The name; `foo`.
-	name: Identifier,
-
-	--- The colon; `:`.
-	colon: Atom<":">,
+	--- The key; `foo`.
+	key: Identifier,
 
 	--- The type; `bar`.
 	type: Type,
 }
 
 --- A table type field with a string key, such as `["foo"]: bar`.
-export type TableTypeField_StringProp = {
-	kind: "stringprop",
+export type TableTypeField_String = {
+	kind: "string",
+	span: Span,
 
 	--- The optional access modifier; `read`.
-	access: (Atom<"read"> | Atom<"write">)?,
-
-	--- The brackets surrounding the key; `[` and `]`.
-	bracks: Delimited<Atom<"[">, Atom<"]">>,
+	access: ("read" | "write")?,
 
 	--- The key; `"foo"`.
 	key: String,
-
-	--- The colon; `:`.
-	colon: Atom<":">,
 
 	--- The type; `bar`.
 	type: Type,
@@ -1145,53 +871,37 @@ export type TableTypeField_StringProp = {
 --- A table type indexer field, such as `[number]: string`.
 export type TableTypeField_Indexer = {
 	kind: "indexer",
+	span: Span,
 
 	--- The optional access modifier; `read`.
-	access: (Atom<"read"> | Atom<"write">)?,
+	access: ("read" | "write")?,
 
-	--- The brackets surrounding the key; `[` and `]`.
-	bracks: Delimited<Atom<"[">, Atom<"]">>,
+	--- The index type; `number`.
+	index: Type,
 
-	--- The key; `number`.
-	key: Type,
-
-	--- The colon; `:`.
-	colon: Atom<":">,
-
-	--- The type; `bar`.
-	type: Type,
+	--- The value type; `string`.
+	value: Type,
 }
 
 --- A function type, such as `<T>(foo: T, ...bar) -> baz`.
 export type Type_Function = {
 	kind: "function",
+	span: Span,
 
 	--- The optional generic decl; `<T>`.
 	generics: GenericDecl?,
 
-	--- The parentheses surrounding the parameters; `(` and `)`.
-	parens: Delimited<Atom<"(">, Atom<")">>,
+	--- The parameters; `foo: T`.
+	params: {{
+		--- The optional name; `foo`.
+		name: Identifier?,
 
-	--- The parameters; `foo: T,`.
-	params: Separated<{
-		--- The optional name of the parameter; `foo:`.
-		name: {
-			--- The name; `foo`.
-			name: Identifier,
-
-			--- The colon; `:`.
-			colon: Atom<":">,
-		}?,
-
-		--- The type of the parameter; `T`
+		--- The type; `T`.
 		type: Type,
-	}, Atom<",">>,
+	}},
 
 	--- The optional tail parameter; `...bar`.
 	tail: TailType?,
-
-	--- The arrow; `->`
-	arrow: Atom<"->">,
 
 	--- The return type; `baz`.
 	ret: ReturnType,
@@ -1200,9 +910,7 @@ export type Type_Function = {
 --- A parenthesized type, such as `(foo)`.
 export type Type_Paren = {
 	kind: "paren",
-
-	--- The parentheses surrounding the type; `(` and `)`.
-	parens: Delimited<Atom<"(">, Atom<")">>,
+	span: Span,
 
 	--- The type; `foo`.
 	type: Type,
@@ -1211,34 +919,28 @@ export type Type_Paren = {
 --- An optional type, such as `foo?`.
 export type Type_Optional = {
 	kind: "optional",
+	span: Span,
 
 	--- The type; `foo`.
 	type: Type,
-
-	--- The question mark; `?`.
-	question: Atom<"?">,
 }
 
 --- A union type, such as `| foo | bar` or `foo | bar`.
 export type Type_Union = {
 	kind: "union",
+	span: Span,
 
-	--- The optional leading pipe; `|`.
-	leading: Atom<"|">,
-
-	--- The types; `foo | bar`.
-	types: Separated<Type, Atom<"|">>,
+	--- The types; `foo` and `bar`.
+	types: { Type },
 }
 
 --- An intersection type, such as `& foo & bar` or `foo & bar`.
 export type Type_Intersection = {
-	kind: "union",
+	kind: "intersection",
+	span: Span,
 
-	--- The optional leading ampersand; `&`.
-	leading: Atom<"&">,
-
-	--- The types; `foo & bar`.
-	types: Separated<Type, Atom<"&">>,
+	--- The types; `foo` and `bar`.
+	types: { Type },
 }
 
 return {}
