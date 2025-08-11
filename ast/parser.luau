@@ -1838,23 +1838,27 @@ local function parse_unary_operator(): ast.UnaryOperator?
 	end
 end
 
-local function is_binary_operator(): boolean
-	return current_kind == "+"
-		or current_kind == "-"
-		or current_kind == "*"
-		or current_kind == "/"
-		or current_kind == "//"
-		or current_kind == "%"
-		or current_kind == "^"
-		or current_kind == ".."
-		or current_kind == "<"
-		or current_kind == "<="
-		or current_kind == ">"
-		or current_kind == ">="
-		or current_kind == "=="
-		or current_kind == "~="
-		or current_kind == "and"
-		or current_kind == "or"
+local binary_operators = {
+	["+"] = true,
+	["-"] = true,
+	["*"] = true,
+	["/"] = true,
+	["//"] = true,
+	["%"] = true,
+	["^"] = true,
+	[".."] = true,
+	["<"] = true,
+	["<="] = true,
+	[">"] = true,
+	[">="] = true,
+	["=="] = true,
+	["~="] = true,
+	["and"] = true,
+	["or"] = true,
+}
+
+local function is_binary_operator(): boolean?
+	return binary_operators[current_kind]
 end
 
 local function binary_operator_priority(): (number, number)
