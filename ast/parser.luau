@@ -1374,7 +1374,9 @@ end
 local function parse_var_root(): ast.VarRoot
 	local start = open()
 
-	if current_kind == "identifier" then
+	local fast_current_kind = current_kind
+
+	if fast_current_kind == "identifier" then
 		local name = consume_identifier()
 
 		return {
@@ -1383,7 +1385,7 @@ local function parse_var_root(): ast.VarRoot
 
 			name = name,
 		}
-	elseif current_kind == "(" then
+	elseif fast_current_kind == "(" then
 		consume("(")
 		local expr = parse_expr()
 		expect(")")
@@ -1514,7 +1516,9 @@ local function parse_var_suffixes(): { ast.VarSuffix }
 	while true do
 		local start = open()
 
-		if current_kind == "." then
+		local fast_current_kind = current_kind
+
+		if fast_current_kind == "." then
 			consume(".")
 			local name = expect_identifier()
 
@@ -1524,7 +1528,7 @@ local function parse_var_suffixes(): { ast.VarSuffix }
 
 				name = name,
 			})
-		elseif current_kind == "[" then
+		elseif fast_current_kind == "[" then
 			consume("[")
 			local expr = parse_expr()
 			expect("]")
@@ -1535,12 +1539,12 @@ local function parse_var_suffixes(): { ast.VarSuffix }
 
 				expr = expr,
 			})
-		elseif current_kind == "(" and #lines ~= line then
+		elseif fast_current_kind == "(" and #lines ~= line then
 			report("ambiguous syntax: this looks like an argument \z
 				list for a function call, but could also be the start \z
 				of a new statement; use ';' to separate statements\z
 			")
-		elseif current_kind == "(" or current_kind == ":"
+		elseif fast_current_kind == "(" or fast_current_kind == ":"
 			or current_kind == "{" or current_kind == "string"
 		then
 			local method: ast.Identifier? = nil
@@ -1729,13 +1733,15 @@ end
 local function parse_simple_expr(): ast.Expr
 	local start = open()
 
-	if current_kind == "nil" then
+	local fast_current_kind = current_kind
+
+	if fast_current_kind == "nil" then
 		consume("nil")
 		return {
 			kind = "nil" :: "nil",
 			span = close(start),
 		}
-	elseif current_kind == "true" then
+	elseif fast_current_kind == "true" then
 		consume("true")
 		return {
 			kind = "boolean" :: "boolean",
@@ -1743,7 +1749,7 @@ local function parse_simple_expr(): ast.Expr
 
 			value = true,
 		}
-	elseif current_kind == "false" then
+	elseif fast_current_kind == "false" then
 		consume("false")
 		return {
 			kind = "boolean" :: "boolean",
@@ -1751,7 +1757,7 @@ local function parse_simple_expr(): ast.Expr
 
 			value = false,
 		}
-	elseif current_kind == "number" then
+	elseif fast_current_kind == "number" then
 		local number = consume_number()
 		return {
 			kind = "number" :: "number",
@@ -1759,7 +1765,7 @@ local function parse_simple_expr(): ast.Expr
 
 			number = number,
 		}
-	elseif current_kind == "string" then
+	elseif fast_current_kind == "string" then
 		local string = consume_string()
 		return {
 			kind = "string" :: "string",
@@ -1767,13 +1773,13 @@ local function parse_simple_expr(): ast.Expr
 
 			string = string,
 		}
-	elseif current_kind == "..." then
+	elseif fast_current_kind == "..." then
 		consume("...")
 		return {
 			kind = "vararg" :: "vararg",
 			span = close(start),
 		}
-	elseif current_kind == "simpleistring" then
+	elseif fast_current_kind == "simpleistring" then
 		local string = consume_istring()
 		return {
 			kind = "simpleistring" :: "simpleistring",
@@ -1781,9 +1787,9 @@ local function parse_simple_expr(): ast.Expr
 
 			string = string,
 		}
-	elseif current_kind == "firstistring" then
+	elseif fast_current_kind == "firstistring" then
 		return parse_complex_istring()
-	elseif current_kind == "{" then
+	elseif fast_current_kind == "{" then
 		local table = parse_table()
 		return {
 			kind = "table" :: "table",
@@ -1791,7 +1797,7 @@ local function parse_simple_expr(): ast.Expr
 
 			table = table,
 		}
-	elseif current_kind == "function" then
+	elseif fast_current_kind == "function" then
 		consume("function")
 		local body = parse_function_body()
 
@@ -1802,7 +1808,7 @@ local function parse_simple_expr(): ast.Expr
 			attributes = {},
 			body = body,
 		}
-	elseif current_kind == "attribute" then
+	elseif fast_current_kind == "attribute" then
 		local attributes = parse_function_attributes()
 		expect("function")
 		local body = parse_function_body()
@@ -1814,7 +1820,7 @@ local function parse_simple_expr(): ast.Expr
 			attributes = attributes,
 			body = body,
 		}
-	elseif current_kind == "if" then
+	elseif fast_current_kind == "if" then
 		return parse_if_else_expr()
 	else
 		local var = parse_var()
@@ -2294,29 +2300,31 @@ local function parse_type_function_stat(start: number, export: boolean): ast.Sta
 end
 
 local function parse_stat(): ast.Stat | ast.LastStat
-	if current_kind == "local" then
+	local fast_current_kind = current_kind
+
+	if fast_current_kind == "local" then
 		if lookahead_kind == "function" then
 			return parse_local_function_stat(open(), {})
 		else
 			return parse_local_variable_stat()
 		end
-	elseif current_kind == "if" then
+	elseif fast_current_kind == "if" then
 		return parse_if_stat()
-	elseif current_kind == "for" then
+	elseif fast_current_kind == "for" then
 		return parse_for_stat()
-	elseif current_kind == "while" then
+	elseif fast_current_kind == "while" then
 		return parse_while_stat()
-	elseif current_kind == "return" then
+	elseif fast_current_kind == "return" then
 		return parse_return_stat()
-	elseif current_kind == "break" then
+	elseif fast_current_kind == "break" then
 		return parse_break_stat()
-	elseif current_kind == "repeat" then
+	elseif fast_current_kind == "repeat" then
 		return parse_repeat_stat()
-	elseif current_kind == "function" then
+	elseif fast_current_kind == "function" then
 		return parse_function_stat(open(), {})
-	elseif current_kind == "do" then
+	elseif fast_current_kind == "do" then
 		return parse_do_stat()
-	elseif current_kind == "attribute" then
+	elseif fast_current_kind == "attribute" then
 		local start = open()
 		local attributes = parse_function_attributes()
 
