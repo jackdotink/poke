@@ -57,14 +57,12 @@ do -- Lexer
 	end
 
 	local function bump()
-		if pos ~= len then
-			pos += 1
-		end
+		pos += 1
 	end
 
 	local function bump_any()
 		if first() == byte("\n") then
-			table.insert(lines, pos + 1)
+			push(lines, pos + 1)
 		end
 
 		bump()
