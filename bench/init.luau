@@ -4,6 +4,7 @@ local cases = {
 	"luau.web",
 	"ast",
 	"parse",
+	"jecs",
 }
 
 local ESC = string.char(27)
