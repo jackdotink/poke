@@ -1844,50 +1844,43 @@ local function parse_unary_operator(): ast.UnaryOperator?
 	end
 end
 
-local binary_operators = {
-	["+"] = true,
-	["-"] = true,
-	["*"] = true,
-	["/"] = true,
-	["//"] = true,
-	["%"] = true,
-	["^"] = true,
-	[".."] = true,
-	["<"] = true,
-	["<="] = true,
-	[">"] = true,
-	[">="] = true,
-	["=="] = true,
-	["~="] = true,
-	["and"] = true,
-	["or"] = true,
+local binary_operator_left: { [string]: number } = {
+	["+"] = 6,
+	["-"] = 6,
+	["*"] = 7,
+	["/"] = 7,
+	["//"] = 7,
+	["%"] = 7,
+	["^"] = 10,
+	[".."] = 5,
+	["<"] = 3,
+	["<="] = 3,
+	[">"] = 3,
+	[">="] = 3,
+	["=="] = 3,
+	["~="] = 3,
+	["and"] = 2,
+	["or"] = 1,
 }
 
-local function is_binary_operator(): boolean?
-	return binary_operators[current_kind]
-end
-
-local function binary_operator_priority(): (number, number)
-	if current_kind == "+" or current_kind == "-" then
-		return 6, 6
-	elseif current_kind == "*" or current_kind == "/" or current_kind == "//" or current_kind == "%" then
-		return 7, 7
-	elseif current_kind == "^" then
-		return 10, 9
-	elseif current_kind == ".." then
-		return 5, 4
-	elseif current_kind == "==" or current_kind == "~=" then
-		return 3, 3
-	elseif current_kind == "<" or current_kind == "<=" or current_kind == ">" or current_kind == ">=" then
-		return 3, 3
-	elseif current_kind == "and" then
-		return 2, 2
-	elseif current_kind == "or" then
-		return 1, 1
-	else
-		error("unreachable")
-	end
-end
+local binary_operator_right: { [string]: number } = {
+	["+"] = 6,
+	["-"] = 6,
+	["*"] = 7,
+	["/"] = 7,
+	["//"] = 7,
+	["%"] = 7,
+	["^"] = 9,
+	[".."] = 4,
+	["<"] = 3,
+	["<="] = 3,
+	[">"] = 3,
+	[">="] = 3,
+	["=="] = 3,
+	["~="] = 3,
+	["and"] = 2,
+	["or"] = 1,
+}
 
 local function parse_expr_with_limit(limit: number): ast.Expr
 	local start = open()
@@ -1923,21 +1916,17 @@ local function parse_expr_with_limit(limit: number): ast.Expr
 	end
 
 	while true do
-		local binop = is_binary_operator()
+		local binop_kind = current_kind
 
-		if not binop then
+		local left_priority = binary_operator_left[binop_kind]
+		if not left_priority or left_priority < limit then
 			break
 		end
 
-		local left_priority, right_priority = binary_operator_priority()
-		if left_priority < limit then
-			break
-		end
-
-		binop = { kind = current_kind, span = current_span } :: ast.BinaryOperator
+		local binop = { kind = binop_kind, span = current_span } :: ast.BinaryOperator
 		consume()
 
-		local right = parse_expr_with_limit(right_priority)
+		local right = parse_expr_with_limit(binary_operator_right[binop_kind])
 
 		expr = {
 			kind = "binary" :: "binary",
