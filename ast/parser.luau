@@ -10,7 +10,7 @@ type Error = {
 }
 
 local function push<T>(t: { T }, v: T)
-	t[#t + 1] = v
+	table.insert(t, v)
 end
 
 local source: buffer

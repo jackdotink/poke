@@ -12,12 +12,12 @@ local time_acc, byte_acc = 0, 0
 
 for _, case in cases do
 	local input = buffer.fromstring((require)("@self/" .. case).str)
-	local bytes = buffer.len(input) * 80
+	local bytes = buffer.len(input) * 100
 
 	local result: { success: boolean, result: any }
 	local start = os.clock()
 
-	for i = 1, 80 do
+	for i = 1, 100 do
 		result = parse.safe(input, parse.parse_chunk) :: any
 	end
 
