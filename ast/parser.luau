@@ -608,8 +608,11 @@ local function report(msg: string, span: ast.Span?): never
 	local report: Error = {
 		msg = msg,
 		span = span or current_span,
-		line = #lines,
 	}
+
+	if debug then
+		(report :: any).line = #lines
+	end
 
 	error(report)
 end
