@@ -1,0 +1,11 @@
+{
+	"name": "poke-debug",
+	"tree": {
+		"$className": "DataModel",
+		"ServerScriptService": {
+			"ast": { "$path": "ast" },
+			"bench": { "$path": "bench" },
+			"debug": { "$className": "Folder", "$ignoreUnknownInstances": true }
+		}
+	}
+}

@@ -1,10 +1,10 @@
 local parse = (require)("./ast/" .. (...))
 
 local cases = {
+	"jecs",
 	"luau.web",
 	"ast",
 	"parse",
-	"jecs",
 }
 
 local ESC = string.char(27)
@@ -28,7 +28,7 @@ for _, case in cases do
 	byte_acc += bytes
 
 	if not result.success then
-		print(`{ESC}[0;31mError: {result.result.msg} @ {result.result.span.x}:{result.result.span.y}`)
+		print(`{ESC}[0;31mError: {result.result.msg} @ {result.result.line or -1}:{result.result.span.x}:{result.result.span.y}`)
 	end
 
 	print(`\z

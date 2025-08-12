@@ -57,6 +57,10 @@ do -- Lexer
 	end
 
 	local function bump()
+		if debug then
+			assert(first() ~= byte("\n"), "newline appeared in bump, not bump_any")
+		end
+
 		pos += 1
 	end
 
@@ -65,7 +69,7 @@ do -- Lexer
 			push(lines, pos + 1)
 		end
 
-		bump()
+		pos += 1
 	end
 
 	local function is_whitespace(c: number): boolean
@@ -615,6 +619,12 @@ local function report(msg: string, span: ast.Span?): never
 	end
 
 	error(report)
+end
+
+local function assert(cond: boolean, msg: string)
+	if not cond then
+		report(msg)
+	end
 end
 
 local function consume(kind: string?)
@@ -1227,6 +1237,7 @@ local function parse_type_suffix(base: ast.Type?): ast.Type
 				report("unions and intersections cannot be mixed")
 			end
 
+			is_intersection = true
 			consume("&")
 			push(types, type)
 		elseif #types == 0 and leading then
@@ -2462,5 +2473,6 @@ return {
 	parse_block = parse_block,
 	parse_chunk = parse_chunk,
 
+	load = load,
 	safe = safe,
 }
