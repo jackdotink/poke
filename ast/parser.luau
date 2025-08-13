@@ -2422,7 +2422,7 @@ local function parse_stat(): ast.Stat | ast.LastStat
 
 			if current_kind == "identifier" then
 				return parse_type_stat(start, export)
-			elseif current_kind :: any == "function" then
+			elseif current_kind == "function" then
 				return parse_type_function_stat(start, export)
 			else
 				return report(`expected identifier or 'function' after 'export type', but got {display(current_kind, current_span)} instead`)
