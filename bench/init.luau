@@ -3,9 +3,9 @@ local source = require("./ast/source")
 
 local cases = {
 	"jecs",
-	"luau.web",
 	"ast",
 	"parse",
+	"luaup",
 }
 
 local ESC = string.char(27)
