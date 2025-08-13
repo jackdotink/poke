@@ -1,5 +1,6 @@
 --!optimize 2
 
+local source = require("./source")
 local ast = require("./ast")
 
 local debug = false
@@ -13,9 +14,9 @@ local function push<T>(t: { T }, v: T)
 	table.insert(t, v)
 end
 
-local source: buffer
+local buf: buffer
 
-local lines: { number }
+local lfs: { number }
 
 local last_span: ast.Span
 
@@ -45,7 +46,7 @@ do -- Lexer
 			return 0
 		end
 
-		return (buffer.readu8(source, pos))
+		return (buffer.readu8(buf, pos))
 	end
 
 	local function second(): number
@@ -53,7 +54,7 @@ do -- Lexer
 			return 0
 		end
 
-		return (buffer.readu8(source, pos + 1))
+		return (buffer.readu8(buf, pos + 1))
 	end
 
 	local function bump()
@@ -66,7 +67,7 @@ do -- Lexer
 
 	local function bump_any()
 		if first() == byte("\n") then
-			push(lines, pos + 1)
+			push(lfs, pos + 1)
 		end
 
 		pos += 1
@@ -130,8 +131,8 @@ do -- Lexer
 		end
 
 		local text =
-			if base == 10 then buffer.readstring(source, start, pos - start)
-			else buffer.readstring(source, start + 2, pos - start - 2)
+			if base == 10 then buffer.readstring(buf, start, pos - start)
+			else buffer.readstring(buf, start + 2, pos - start - 2)
 
 		if underscore then
 			text = string.gsub(text, "_", "")
@@ -152,7 +153,7 @@ do -- Lexer
 			c = first()
 
 			if c == byte("\n") then
-				table.insert(lines, pos + 1)
+				table.insert(lfs, pos + 1)
 				bump()
 			end
 		elseif c == byte("z") then
@@ -373,7 +374,7 @@ do -- Lexer
 			until not (is_alpha(c) or is_digit(c) or c == byte("_"))
 
 			if identifierd[d] then
-				local text = buffer.readstring(source, start, pos - start)
+				local text = buffer.readstring(buf, start, pos - start)
 				lookahead_kind = if identifiers[text] then text else "identifier"
 			else
 				lookahead_kind = "identifier"
@@ -577,14 +578,14 @@ do -- Lexer
 		lookahead_span = vector.create(start, pos, sid)
 	end
 
-	function load(source_: buffer, sid_: number)
-		source = source_
-
-		sid = sid_
+	function load(id: number)
+		sid = id
+		buf = source.text(id)
+		len = buffer.len(buf)
 		pos = 0
-		len = buffer.len(source)
 
-		lines = { 1 }
+		lfs = source.fill(id)
+		assert(#lfs == 0, "cannot load source that already has line info")
 
 		brace_count = 0
 		table.clear(brace_stack)
@@ -594,15 +595,25 @@ do -- Lexer
 	end
 end
 
+local function current_line(): number
+	local line = #lfs
+
+	while current_span.y < lfs[line] do
+		line -= 1
+	end
+
+	return line
+end
+
 local function display(kind: string, span: ast.Span): string
 	if kind == "identifier"
 		or kind == "number"
 		or kind == "string"
 		or kind == "attribute"
 	then
-		return kind .. " '" .. buffer.readstring(source, span.x, span.y - span.x) .. "'"
+		return kind .. " '" .. buffer.readstring(buf, span.x, span.y - span.x) .. "'"
 	elseif kind == "error" then
-		return "'" .. buffer.readstring(source, span.x, span.y - span.x) .. "'"
+		return "'" .. buffer.readstring(buf, span.x, span.y - span.x) .. "'"
 	else
 		return "'" .. kind .. "'"
 	end
@@ -615,7 +626,7 @@ local function report(msg: string, span: ast.Span?): never
 	}
 
 	if debug then
-		(report :: any).line = #lines
+		(report :: any).line = current_line()
 	end
 
 	error(report)
@@ -991,7 +1002,7 @@ local function parse_table_type(): ast.Type_Table | ast.Type_Array
 		local access: ("read" | "write")? = nil
 
 		if current_kind == "identifier" and lookahead_kind ~= ":" then
-			local text = buffer.readstring(source, current_span.x, current_span.y - current_span.x)
+			local text = buffer.readstring(buf, current_span.x, current_span.y - current_span.x)
 
 			if text == "read" or text == "write" then
 				access_span = current_span
@@ -1160,7 +1171,7 @@ local function parse_simple_type(): ast.Type
 		local string = consume_string()
 		return { kind = "string" :: "string", span = close(start), string = string }
 	elseif current_kind == "identifier" then
-		if buffer.readstring(source, current_span.x, current_span.y - current_span.x) == "typeof" then
+		if buffer.readstring(buf, current_span.x, current_span.y - current_span.x) == "typeof" then
 			consume("identifier")
 			expect("(")
 			local expr = parse_expr()
@@ -1522,7 +1533,7 @@ local function parse_function_args(): { ast.Expr }
 end
 
 local function parse_var_suffixes(): { ast.VarSuffix }
-	local line = #lines
+	local line = current_line()
 	local suffixes: { ast.VarSuffix } = {}
 
 	while true do
@@ -1551,7 +1562,7 @@ local function parse_var_suffixes(): { ast.VarSuffix }
 
 				expr = expr,
 			})
-		elseif fast_current_kind == "(" and #lines ~= line then
+		elseif fast_current_kind == "(" and current_line() ~= line then
 			report("ambiguous syntax: this looks like an argument \z
 				list for a function call, but could also be the start \z
 				of a new statement; use ';' to separate statements\z
@@ -2395,12 +2406,12 @@ local function parse_stat(): ast.Stat | ast.LastStat
 			right = right,
 		}
 	elseif not last and var.root.kind == "name" then
-		local text = buffer.readstring(source, var.span.x, var.span.y - var.span.x)
+		local text = buffer.readstring(buf, var.span.x, var.span.y - var.span.x)
 
 		if text == "export" or text == "type" then
 			local export = text == "export"
 			if export then
-				text = buffer.readstring(source, current_span.x, current_span.y - current_span.x)
+				text = buffer.readstring(buf, current_span.x, current_span.y - current_span.x)
 
 				if text == "type" then
 					consume("identifier")
@@ -2444,6 +2455,10 @@ function parse_block(): ast.Block
 		else
 			push(stats, stat)
 		end
+
+		if current_kind == ";" then
+			consume(";")
+		end
 	end
 
 	return {
@@ -2460,8 +2475,8 @@ local function parse_chunk(): ast.Chunk
 	return block
 end
 
-local function safe<T>(input: string | buffer, parser: () -> T): { success: true, result: T } | { success: false, result: Error }
-	load(if type(input) == "string" then buffer.fromstring(input) else input, 0)
+local function safe<T>(id: number, parser: () -> T): { success: true, result: T } | { success: false, result: Error }
+	load(id)
 	local success, result = pcall(parser)
 	return { success = success, result = result } :: any
 end

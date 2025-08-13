@@ -1,4 +1,5 @@
-local parse = (require)("./ast/" .. (...))
+local parser = (require)("./ast/" .. (...))
+local source = require("./ast/source")
 
 local cases = {
 	"jecs",
@@ -9,36 +10,40 @@ local cases = {
 
 local ESC = string.char(27)
 
-local time_acc, byte_acc = 0, 0
+local total_time_acc, byte_acc = 0, 0
 
 for _, case in cases do
-	local input = buffer.fromstring((require)("@self/" .. case).str)
-	local bytes = buffer.len(input) * 100
+	local input = (require)("@self/" .. case).str
 
-	local result: { success: boolean, result: any }
-	local start = os.clock()
+	local sid = source.create(input)
+	local bytes = #input * 100
+
+	local this_time_acc = 0
 
 	for i = 1, 100 do
-		result = parse.safe(input, parse.parse_chunk) :: any
+		local result: any
+		table.clear(source.fill(sid))
+
+		local start = os.clock()
+		result = parser.safe(sid, parser.parse_chunk)
+		this_time_acc += os.clock() - start
+
+		if not result.success then
+			print(`{ESC}[0;31mError: {result.result.msg} @ {result.result.line or -1}:{result.result.span.x}:{result.result.span.y}`)
+		end
 	end
 
-	local time = os.clock() - start
-
-	time_acc += time
+	total_time_acc += this_time_acc
 	byte_acc += bytes
-
-	if not result.success then
-		print(`{ESC}[0;31mError: {result.result.msg} @ {result.result.line or -1}:{result.result.span.x}:{result.result.span.y}`)
-	end
 
 	print(`\z
 		{ESC}[1;32mCase: {ESC}[0m{case}; \z
-		{ESC}[1;32mTime: {ESC}[0m{string.format("%d", time * 1000)}ms; \z
-		{ESC}[1;32mRate: {ESC}[0m{string.format("%.2f", bytes / 1_000_000 / time)} MB/s\z
+		{ESC}[1;32mTime: {ESC}[0m{string.format("%d", this_time_acc * 1000)}ms; \z
+		{ESC}[1;32mRate: {ESC}[0m{string.format("%.2f", bytes / 1_000_000 / this_time_acc)} MB/s\z
 	`)
 end
 
 print(`\z
-	{ESC}[1;32mTime: {ESC}[0m{string.format("%d", time_acc * 1000)}ms; \z
-	{ESC}[1;32mRate: {ESC}[0m{string.format("%.2f", byte_acc / 1_000_000 / time_acc)} MB/s\z
+	{ESC}[1;32mTime: {ESC}[0m{string.format("%d", total_time_acc * 1000)}ms; \z
+	{ESC}[1;32mRate: {ESC}[0m{string.format("%.2f", byte_acc / 1_000_000 / total_time_acc)} MB/s\z
 `)
