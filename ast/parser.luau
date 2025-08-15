@@ -3,7 +3,7 @@
 local source = require("./source")
 local ast = require("./ast")
 
-local debug = false
+local debug = true
 
 type Error = {
 	msg: string,
@@ -74,7 +74,7 @@ do -- Lexer
 	end
 
 	local function is_whitespace(c: number): boolean
-		return c == byte(" ") or (c <= byte("\f") and byte("\t") <= c)
+		return c == byte(" ") or (c <= byte("\r") and byte("\t") <= c)
 	end
 
 	local function is_digit(c: number): boolean
@@ -598,11 +598,19 @@ end
 local function current_line(): number
 	local line = #lfs
 
-	while current_span.y < lfs[line] do
-		line -= 1
+	if line == 0 then
+		return 1
 	end
 
-	return line
+	while current_span.y < lfs[line] do
+		line -= 1
+
+		if line == 0 then
+			return 1
+		end
+	end
+
+	return line + 1
 end
 
 local function display(kind: string, span: ast.Span): string
@@ -626,7 +634,17 @@ local function report(msg: string, span: ast.Span?): never
 	}
 
 	if debug then
-		(report :: any).line = current_line()
+		local current_start = current_span.x
+		local current_bytes = math.clamp(current_span.y, 0, buffer.len(buf)) - current_span.x
+
+		local lookahead_start = lookahead_span.x
+		local lookahead_bytes = math.clamp(lookahead_span.y, 0, buffer.len(buf)) - lookahead_span.x
+
+		local msg = `{msg} @ {current_line()} with \z
+			{current_kind} ({buffer.readstring(buf, current_start, current_bytes)}) \z
+			and {lookahead_kind} ({buffer.readstring(buf, lookahead_start, lookahead_bytes)})`
+		
+		report.msg = msg
 	end
 
 	error(report)
@@ -704,7 +722,7 @@ end
 
 local expect_failure
 function expect_failure(kind: string): never
-	return report(`expected {display(kind, vector.zero)} but got {display(current_kind, current_span)} instead`)
+	return report(`expected {display(kind, vector.zero)}, but got {display(current_kind, current_span)} instead`)
 end
 
 local function expect(kind: string)
@@ -1588,6 +1606,8 @@ local function parse_var_suffixes(): { ast.VarSuffix }
 		else
 			break
 		end
+
+		line = current_line()
 	end
 
 	return suffixes
@@ -2269,15 +2289,16 @@ local function parse_do_stat(): ast.Stat_Do
 	}
 end
 
-local function is_compound_operator(): boolean
-	return current_kind == "+="
-		or current_kind == "-="
-		or current_kind == "/="
-		or current_kind == "//="
-		or current_kind == "%="
-		or current_kind == "^="
-		or current_kind == "..="
-end
+local compound_operators: { [string]: boolean } = {
+	["+="] = true,
+	["-="] = true,
+	["*="] = true,
+	["/="] = true,
+	["//="] = true,
+	["%="] = true,
+	["^="] = true,
+	["..="] = true,
+}
 
 local function parse_type_stat(start: number, export: boolean): ast.Stat_Type
 	local name = consume_identifier()
@@ -2357,7 +2378,7 @@ local function parse_stat(): ast.Stat | ast.LastStat
 	local var = parse_var()
 	local last = var.suffixes[#var.suffixes]
 
-	if is_compound_operator() then
+	if compound_operators[current_kind] then
 		local operator = { kind = current_kind, span = current_span } :: ast.CompoundOperator
 		consume()
 		local right = parse_expr()
@@ -2445,6 +2466,10 @@ function parse_block(): ast.Block
 	while not is_block_end() do
 		local stat = parse_stat()
 
+		if current_kind == ";" then
+			consume(";")
+		end
+
 		if stat.kind == "return" or stat.kind == "break" or stat.kind == "continue" then
 			return {
 				span = close(start),
@@ -2454,10 +2479,6 @@ function parse_block(): ast.Block
 			}
 		else
 			push(stats, stat)
-		end
-
-		if current_kind == ";" then
-			consume(";")
 		end
 	end
 

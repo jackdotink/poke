@@ -1,19 +1,30 @@
-local parser = (require)("./ast/" .. (...))
-local source = require("./ast/source")
+--!nocheck
+local args = { ... }
 
-local cases = {
-	"jecs",
-	"ast",
-	"parse",
-	"luaup",
-}
+local parser = (require)("../ast/" .. args[1])
+local source = require("../ast/source")
+
+local files = require("../extern/files")
+for i, file in files do
+	if string.sub(file, -4, -1) == ".lua" then
+		file = string.sub(file, 1, -5)
+	else
+		file = string.sub(file, 1, -6)
+	end
+
+	if string.sub(file, -5, -1) == "/init" then
+		file = string.sub(file, 1, -6)
+	end
+
+	files[i] = file
+end
 
 local ESC = string.char(27)
 
 local total_time_acc, byte_acc = 0, 0
 
-for _, case in cases do
-	local input = (require)("@self/" .. case).str
+for _, case in files do
+	local input = (require)("../" .. case).str
 
 	local sid = source.create(input)
 	local bytes = #input * 100
@@ -29,7 +40,11 @@ for _, case in cases do
 		this_time_acc += os.clock() - start
 
 		if not result.success then
-			print(`{ESC}[0;31mError: {result.result.msg} @ {result.result.line or -1}:{result.result.span.x}:{result.result.span.y}`)
+			if type(result.result) == "string" then
+				print(`{ESC}[0;31mError: {result.result}`)
+			else
+				print(`{ESC}[0;31mError: {result.result.msg}`)
+			end
 		end
 	end
 

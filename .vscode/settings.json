@@ -2,4 +2,5 @@
 	"luau-lsp.sourcemap.enabled": false,
 	"luau-lsp.platform.type": "standard",
 	"luau-lsp.fflags.enableNewSolver": true,
+	"luau-lsp.ignoreGlobs": ["extern/**"]
 }

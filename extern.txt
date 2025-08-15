@@ -1,0 +1,8 @@
+https://github.com/ukendio/jecs/archive/refs/heads/main.zip
+https://github.com/quenty/nevermoreengine/archive/refs/heads/main.zip
+https://github.com/kohls-admin/kohls-admin/archive/refs/heads/master.zip
+https://github.com/Epix-Incorporated/Adonis/archive/refs/heads/master.zip
+https://github.com/dphfox/Fusion/archive/refs/heads/main.zip
+https://github.com/anthony0br/DocumentService/archive/refs/heads/main.zip
+https://github.com/alicesaidhi/conch/archive/refs/heads/main.zip
+https://github.com/alicesaidhi/jabby/archive/refs/heads/main.zip
