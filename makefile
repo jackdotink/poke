@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: extern bench profile stat flame clean
+.PHONY: extern parser-bench parser-profile parser-stat parser-flame clean
 
 codegen = 0
 ifneq ($(codegen), 0)
@@ -46,19 +46,19 @@ extern:
 	@echo "}" >> files.luau
 	@mv files.luau extern/files.luau
 
-bench:
-	luau scripts/bench.luau $(codegenflag) -a $(parser)
+parser-bench:
+	luau scripts/parserbench.luau $(codegenflag) -a $(parser)
 
-profile:
+parser-profile:
 	@mkdir profile -p
-	luau scripts/bench.luau $(codegenflag) --profile=$(rate) -a $(parser)
+	luau scripts/parserbench.luau $(codegenflag) --profile=$(rate) -a $(parser)
 	@mv profile.out profile/$(out).out
 
-stats: profile
+parser-stats: parser-profile
 	@chmod +x scripts/perfstat.py
 	@scripts/perfstat.py profile/$(out).out --limit=$(limit)
 
-flame: profile
+parser-flame: parser-profile
 	@chmod +x scripts/perfgraph.py
 	@scripts/perfgraph.py profile/$(out).out > profile/$(out).svg
 
