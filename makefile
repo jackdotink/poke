@@ -9,6 +9,7 @@ else
 endif
 
 parser = "parser"
+lexer = "lexer"
 files = cat extern/list.txt
 rate = 10000
 out = $(parser)
@@ -59,6 +60,22 @@ parser-stats: parser-profile
 	@scripts/perfstat.py profile/$(out).out --limit=$(limit)
 
 parser-flame: parser-profile
+	@chmod +x scripts/perfgraph.py
+	@scripts/perfgraph.py profile/$(out).out > profile/$(out).svg
+
+lexer-bench:
+	luau scripts/lexerbench.luau $(codegenflag) -a $(lexer)
+
+lexer-profile:
+	@mkdir profile -p
+	luau scripts/lexerbench.luau $(codegenflag) --profile=$(rate) -a $(lexer)
+	@mv profile.out profile/$(out).out
+
+lexer-stats: lexer-profile
+	@chmod +x scripts/perfstat.py
+	@scripts/perfstat.py profile/$(out).out --limit=$(limit)
+
+lexer-flame: lexer-profile
 	@chmod +x scripts/perfgraph.py
 	@scripts/perfgraph.py profile/$(out).out > profile/$(out).svg
 

@@ -2,6 +2,7 @@
 
 local source = require("./source")
 local ast = require("./ast")
+local lexer = require("./lexer")
 
 local debug = true
 
@@ -15,10 +16,9 @@ local function push<T>(t: { T }, v: T)
 end
 
 local buf: buffer
-
 local lfs: { number }
 
-local last_span: ast.Span
+local last_span: ast.Span = vector.zero
 
 local current_kind: string
 local current_span: ast.Span
@@ -26,573 +26,16 @@ local current_span: ast.Span
 local lookahead_kind: string
 local lookahead_span: ast.Span
 
-local next: () -> ()
-local load: (buffer) -> ()
+local next = lexer.next
 
-do -- Lexer
-	local sid: number
-	local pos: number
-	local len: number
+local function load(id: number)
+	buf = source.text(id)
+	lfs = source.fill(id)
 
-	local brace_count: number
-	local brace_stack: { number } = {}
+	lexer.load(id)
 
-	local function byte(c: string): number
-		return (string.byte(c))
-	end
-
-	local function first(): number
-		if pos >= len then
-			return 0
-		end
-
-		return (buffer.readu8(buf, pos))
-	end
-
-	local function second(): number
-		if pos + 1 >= len then
-			return 0
-		end
-
-		return (buffer.readu8(buf, pos + 1))
-	end
-
-	local function bump()
-		if debug then
-			assert(first() ~= byte("\n"), "newline appeared in bump, not bump_any")
-		end
-
-		pos += 1
-	end
-
-	local function bump_any()
-		if first() == byte("\n") then
-			push(lfs, pos + 1)
-		end
-
-		pos += 1
-	end
-
-	local function is_whitespace(c: number): boolean
-		return c == byte(" ") or (c <= byte("\r") and byte("\t") <= c)
-	end
-
-	local function is_digit(c: number): boolean
-		return byte("0") <= c and c <= byte("9")
-	end
-
-	local function is_alpha(c: number): boolean
-		return (byte("a") <= c and c <= byte("z")) or (byte("A") <= c and c <= byte("Z"))
-	end
-
-	local function number(): "number" | "error"
-		local underscore = false
-		local start = pos
-		local base = 10
-
-		local c = first()
-		if c == byte("0") then
-			bump()
-			c = first()
-
-			if c == byte("x") or c == byte("X") then
-				bump()
-				c = first()
-				base = 16
-			elseif c == byte("b") or c == byte("B") then
-				bump()
-				c = first()
-				base = 2
-			end
-		end
-
-		while is_digit(c) or c == byte(".") or c == byte("_") do
-			if c == byte("_") then
-				underscore = true
-			end
-
-			bump()
-			c = first()
-		end
-
-		if c == byte("e") or c == byte("E") then
-			bump()
-			c = first()
-
-			if c == byte("+") or c == byte("-") then
-				bump()
-				c = first()
-			end
-		end
-
-		while is_digit(c) or is_alpha(c) or c == byte("_") do
-			bump()
-			c = first()
-		end
-
-		local text =
-			if base == 10 then buffer.readstring(buf, start, pos - start)
-			else buffer.readstring(buf, start + 2, pos - start - 2)
-
-		if underscore then
-			text = string.gsub(text, "_", "")
-		end
-
-		if tonumber(text, base) then
-			return "number"
-		else
-			return "error"
-		end
-	end
-
-	local function string_backslash()
-		local c = first()
-
-		if c == byte("\r") then
-			bump()
-			c = first()
-
-			if c == byte("\n") then
-				table.insert(lfs, pos + 1)
-				bump()
-			end
-		elseif c == byte("z") then
-			bump()
-
-			while is_whitespace(first()) do
-				bump_any()
-			end
-		else
-			bump_any()
-		end
-	end
-
-	local function quoted_string(): "string" | "error"
-		local delim = first()
-		bump()
-		local c = first()
-
-		while c ~= delim do
-			if c == 0 or c == byte("\n") or c == byte("\r") then
-				return "error"
-			elseif c == byte("\\") then
-				bump()
-				string_backslash()
-			else
-				bump()
-			end
-
-			c = first()
-		end
-
-		bump()
-		return "string"
-	end
-
-	local function long_seperator(): number
-		local count = 0
-
-		while first() == byte("=") do
-			bump()
-			count += 1
-		end
-
-		return count
-	end
-
-	local function long_string(eqs: number): "string" | "error"
-		bump()
-
-		while true do
-			local c = first()
-
-			if c == byte("]") then
-				bump()
-
-				if long_seperator() == eqs and first() == byte("]") then
-					bump()
-					return "string"
-				end
-			elseif c == 0 then
-				return "error"
-			else
-				bump_any()
-			end
-		end
-	end
-
-	local function istring_section(
-		from: "start" | "middle"
-	): "simpleistring" | "firstistring" | "middleistring" | "lastistring" | "error"
-		local c = first()
-
-		while c ~= byte("`") do
-			if c == 0 or c == byte("\n") or c == byte("\r") then
-				return "error"
-			elseif c == byte("\\") then
-				bump()
-
-				if first() == byte("u") then
-					bump()
-
-					if first() == byte("{") then
-						bump()
-					end
-				else
-					string_backslash()
-				end
-			elseif c == byte("{") then
-				bump()
-
-				if first() == byte("{") then
-					bump()
-					return "error"
-				else
-					table.insert(brace_stack, brace_count)
-
-					if from == "start" then
-						return "firstistring"
-					else
-						return "middleistring"
-					end
-				end
-			else
-				bump()
-			end
-
-			c = first()
-		end
-
-		bump()
-
-		if from == "start" then
-			return "simpleistring"
-		else
-			return "lastistring"
-		end
-	end
-
-	local function comment(): "comment" | "error"
-		local c = first()
-
-		if c == byte("[") then
-			bump()
-			local eqs = long_seperator()
-
-			if first() == byte("[") then
-				local result = long_string(eqs)
-
-				if result == "error" then
-					return "error"
-				else
-					return "comment"
-				end
-			end
-		end
-
-		c = first()
-
-		while c ~= 0 and c ~= byte("\n") do
-			bump()
-			c = first()
-		end
-
-		return "comment"
-	end
-
-	local identifiers = {
-		["local"] = true,
-		["end"] = true,
-		["elseif"] = true,
-		["else"] = true,
-		["then"] = true,
-		["true"] = true,
-		["return"] = true,
-		["repeat"] = true,
-		["function"] = true,
-		["for"] = true,
-		["false"] = true,
-		["if"] = true,
-		["in"] = true,
-		["do"] = true,
-		["nil"] = true,
-		["not"] = true,
-		["or"] = true,
-		["and"] = true,
-		["break"] = true,
-		["while"] = true,
-		["until"] = true,
-	}
-
-	local identifierd = {
-		[byte("l")] = true,
-		[byte("e")] = true,
-		[byte("t")] = true,
-		[byte("r")] = true,
-		[byte("f")] = true,
-		[byte("i")] = true,
-		[byte("d")] = true,
-		[byte("n")] = true,
-		[byte("o")] = true,
-		[byte("a")] = true,
-		[byte("b")] = true,
-		[byte("w")] = true,
-		[byte("u")] = true,
-	}
-
-	function next()
-		last_span = current_span
-
-		current_kind = lookahead_kind
-		current_span = lookahead_span
-
-		local c = first()
-
-		while true do
-			if is_whitespace(c) then
-				bump_any()
-				c = first()
-			elseif c == byte("-") and second() == byte("-") then
-				bump()
-				bump()
-
-				comment()
-				c = first()
-			else
-				break
-			end
-		end
-
-		local start = pos
-
-		if is_alpha(c) or c == byte("_") then
-			local d = c
-
-			repeat
-				bump()
-				c = first()
-			until not (is_alpha(c) or is_digit(c) or c == byte("_"))
-
-			if identifierd[d] then
-				local text = buffer.readstring(buf, start, pos - start)
-				lookahead_kind = if identifiers[text] then text else "identifier"
-			else
-				lookahead_kind = "identifier"
-			end
-		elseif is_digit(c) then
-			lookahead_kind = number()
-		elseif c == byte('"') or c == byte("'") then
-			lookahead_kind = quoted_string()
-		elseif c == byte("`") then
-			bump()
-			lookahead_kind = istring_section("start")
-		elseif c == byte("{") then
-			brace_count += 1
-			bump()
-			lookahead_kind = "{"
-		elseif c == byte("}") then
-			local brace_stack_len = #brace_stack
-
-			if brace_stack_len ~= 0 and brace_stack[brace_stack_len] == brace_count then
-				brace_stack[brace_stack_len] = nil
-				lookahead_kind = istring_section("middle")
-			else
-				brace_count -= 1
-				bump()
-				lookahead_kind = "}"
-			end
-		elseif c == byte("[") then
-			bump()
-
-			local eqs = long_seperator()
-
-			if first() == byte("[") then
-				lookahead_kind = long_string(eqs)
-			elseif eqs == 0 then
-				lookahead_kind = "["
-			else
-				lookahead_kind = "error"
-			end
-		else
-			bump()
-
-			if c == byte(",") then
-				lookahead_kind = ","
-			elseif c == byte("(") then
-				lookahead_kind = "("
-			elseif c == byte(")") then
-				lookahead_kind = ")"
-			elseif c == byte("=") then
-				c = first()
-
-				if c == byte("=") then
-					bump()
-					lookahead_kind = "=="
-				else
-					lookahead_kind = "="
-				end
-			elseif c == byte(".") then
-				c = first()
-
-				if c == byte(".") then
-					bump()
-					c = first()
-
-					if c == byte(".") then
-						bump()
-						lookahead_kind = "..."
-					elseif c == byte("=") then
-						bump()
-						lookahead_kind = "..="
-					else
-						lookahead_kind = ".."
-					end
-				elseif is_digit(c) then
-					pos -= 1
-					lookahead_kind = number()
-				else
-					lookahead_kind = "."
-				end
-			elseif c == byte(":") then
-				c = first()
-
-				if c == byte(":") then
-					bump()
-					lookahead_kind = "::"
-				else
-					lookahead_kind = ":"
-				end
-			elseif c == byte("<") then
-				c = first()
-
-				if c == byte("=") then
-					bump()
-					lookahead_kind = "<="
-				else
-					lookahead_kind = "<"
-				end
-			elseif c == byte(">") then
-				c = first()
-
-				if c == byte("=") then
-					bump()
-					lookahead_kind = ">="
-				else
-					lookahead_kind = ">"
-				end
-			elseif c == byte("]") then
-				lookahead_kind = "]"
-			elseif c == byte("|") then
-				lookahead_kind = "|"
-			elseif c == byte("?") then
-				lookahead_kind = "?"
-			elseif c == byte("+") then
-				c = first()
-
-				if c == byte("=") then
-					bump()
-					lookahead_kind = "+="
-				else
-					lookahead_kind = "+"
-				end
-			elseif c == byte("-") then
-				c = first()
-
-				if c == byte("=") then
-					bump()
-					lookahead_kind = "-="
-				elseif c == byte(">") then
-					bump()
-					lookahead_kind = "->"
-				else
-					lookahead_kind = "-"
-				end
-			elseif c == byte("*") then
-				c = first()
-
-				if c == byte("=") then
-					bump()
-					lookahead_kind = "*="
-				else
-					lookahead_kind = "*"
-				end
-			elseif c == byte("#") then
-				lookahead_kind = "#"
-			elseif c == byte("&") then
-				lookahead_kind = "&"
-			elseif c == byte("~") then
-				c = first()
-
-				if c == byte("=") then
-					bump()
-					lookahead_kind = "~="
-				else
-					lookahead_kind = "error"
-				end
-			elseif c == byte("/") then
-				c = first()
-
-				if c == byte("/") then
-					bump()
-					c = first()
-
-					if c == byte("=") then
-						bump()
-						lookahead_kind = "//="
-					else
-						lookahead_kind = "//"
-					end
-				elseif c == byte("=") then
-					bump()
-					lookahead_kind = "/="
-				else
-					lookahead_kind = "/"
-				end
-			elseif c == byte("^") then
-				c = first()
-
-				if c == byte("=") then
-					bump()
-					lookahead_kind = "^="
-				else
-					lookahead_kind = "^"
-				end
-			elseif c == byte(";") then
-				lookahead_kind = ";"
-			elseif c == byte("%") then
-				c = first()
-
-				if c == byte("=") then
-					bump()
-					lookahead_kind = "%="
-				else
-					lookahead_kind = "%"
-				end
-			elseif c == 0 then
-				lookahead_kind = "eof"
-			else
-				lookahead_kind = "error"
-			end
-		end
-
-		lookahead_span = vector.create(start, pos, sid)
-	end
-
-	function load(id: number)
-		sid = id
-		buf = source.text(id)
-		len = buffer.len(buf)
-		pos = 0
-
-		lfs = source.fill(id)
-		assert(#lfs == 0, "cannot load source that already has line info")
-
-		brace_count = 0
-		table.clear(brace_stack)
-
-		next()
-		next()
-	end
+	current_kind, current_span = next()
+	lookahead_kind, lookahead_span = next()
 end
 
 local function current_line(): number
@@ -641,8 +84,8 @@ local function report(msg: string, span: ast.Span?): never
 		local lookahead_bytes = math.clamp(lookahead_span.y, 0, buffer.len(buf)) - lookahead_span.x
 
 		local msg = `{msg} @ {current_line()} with \z
-			{current_kind} ({buffer.readstring(buf, current_start, current_bytes)}) \z
-			and {lookahead_kind} ({buffer.readstring(buf, lookahead_start, lookahead_bytes)})`
+			{current_kind} '{buffer.readstring(buf, current_start, current_bytes)}' \z
+			and {lookahead_kind} '{buffer.readstring(buf, lookahead_start, lookahead_bytes)}'`
 		
 		report.msg = msg
 	end
@@ -661,7 +104,9 @@ local function consume(kind: string?)
 		assert(kind == nil or current_kind == kind, "attempted to consume incorrect kind")
 	end
 
-	next()
+	last_span = current_span
+	current_kind, current_span = lookahead_kind, lookahead_span
+	lookahead_kind, lookahead_span = next()
 end
 
 local function consume_identifier(): ast.Identifier
@@ -670,7 +115,7 @@ local function consume_identifier(): ast.Identifier
 	end
 
 	local identifier: ast.Identifier = { span = current_span }
-	next()
+	consume("identifier")
 	return identifier
 end
 
@@ -680,7 +125,7 @@ local function consume_number(): ast.Number
 	end
 
 	local number: ast.Number = { span = current_span }
-	next()
+	consume("number")
 	return number
 end
 
@@ -690,7 +135,7 @@ local function consume_string(): ast.String
 	end
 
 	local string: ast.String = { span = current_span }
-	next()
+	consume("string")
 	return string
 end
 
@@ -700,7 +145,7 @@ local function consume_attribute(): ast.Attribute
 	end
 
 	local attribute: ast.Attribute = { span = current_span }
-	next()
+	consume("attribute")
 	return attribute
 end
 
@@ -716,7 +161,7 @@ local function consume_istring(): ast.IString
 	end
 
 	local istring: ast.IString = { span = current_span }
-	next()
+	consume()
 	return istring
 end
 
@@ -727,7 +172,7 @@ end
 
 local function expect(kind: string)
 	if current_kind == kind then
-		next()
+		consume()
 	else
 		expect_failure(kind)
 	end
