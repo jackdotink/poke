@@ -4,6 +4,8 @@ local args = { ... }
 local parser = (require)("../ast/" .. args[1])
 local source = require("../ast/source")
 
+local silent = args[2] == "silent"
+
 local files = require("../extern/files")
 for i, file in files do
 	if string.sub(file, -4, -1) == ".lua" then
@@ -51,11 +53,13 @@ for _, case in files do
 	total_time_acc += this_time_acc
 	byte_acc += bytes
 
-	print(`\z
-		{ESC}[1;32mCase: {ESC}[0m{case}; \z
-		{ESC}[1;32mTime: {ESC}[0m{string.format("%d", this_time_acc * 1000)}ms; \z
-		{ESC}[1;32mRate: {ESC}[0m{string.format("%.2f", bytes / 1_000_000 / this_time_acc)} MB/s\z
-	`)
+	if not silent then
+		print(`\z
+			{ESC}[1;32mCase: {ESC}[0m{case}; \z
+			{ESC}[1;32mTime: {ESC}[0m{string.format("%d", this_time_acc * 1000)}ms; \z
+			{ESC}[1;32mRate: {ESC}[0m{string.format("%.2f", bytes / 1_000_000 / this_time_acc)} MB/s\z
+		`)
+	end
 end
 
 print(`\z

@@ -8,6 +8,7 @@ else
 	codegenflag =
 endif
 
+silent =
 parser = "parser"
 lexer = "lexer"
 files = cat extern/list.txt
@@ -48,11 +49,11 @@ extern:
 	@mv files.luau extern/files.luau
 
 parser-bench:
-	luau scripts/parserbench.luau $(codegenflag) -a $(parser)
+	luau scripts/parserbench.luau $(codegenflag) -a $(parser) $(silent)
 
 parser-profile:
 	@mkdir profile -p
-	luau scripts/parserbench.luau $(codegenflag) --profile=$(rate) -a $(parser)
+	luau scripts/parserbench.luau $(codegenflag) --profile=$(rate) -a $(parser) $(silent)
 	@mv profile.out profile/$(out).out
 
 parser-stats: parser-profile
@@ -64,11 +65,11 @@ parser-flame: parser-profile
 	@scripts/perfgraph.py profile/$(out).out > profile/$(out).svg
 
 lexer-bench:
-	luau scripts/lexerbench.luau $(codegenflag) -a $(lexer)
+	luau scripts/lexerbench.luau $(codegenflag) -a $(lexer) $(silent)
 
 lexer-profile:
 	@mkdir profile -p
-	luau scripts/lexerbench.luau $(codegenflag) --profile=$(rate) -a $(lexer)
+	luau scripts/lexerbench.luau $(codegenflag) --profile=$(rate) -a $(lexer) $(silent)
 	@mv profile.out profile/$(out).out
 
 lexer-stats: lexer-profile
