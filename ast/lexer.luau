@@ -60,10 +60,6 @@ local function is_digit(c: number): boolean
 end
 
 local function is_alpha(c: number): boolean
-	if type(c) == "string" then
-		error("how did we get here")
-	end
-
 	return (byte("a") <= c and c <= byte("z")) or (byte("A") <= c and c <= byte("Z"))
 end
 
@@ -258,47 +254,53 @@ local function comment(): "comment" | "error"
 end
 
 local identifiers = {
-	["local"] = true,
-	["end"] = true,
-	["elseif"] = true,
-	["else"] = true,
-	["then"] = true,
-	["true"] = true,
-	["return"] = true,
-	["repeat"] = true,
-	["function"] = true,
-	["for"] = true,
-	["false"] = true,
-	["if"] = true,
-	["in"] = true,
-	["do"] = true,
-	["nil"] = true,
-	["not"] = true,
-	["or"] = true,
-	["and"] = true,
-	["break"] = true,
-	["while"] = true,
-	["until"] = true,
+	["local"] = "local",
+	["end"] = "end",
+	["elseif"] = "elseif",
+	["else"] = "else",
+	["then"] = "then",
+	["true"] = "true",
+	["return"] = "return",
+	["repeat"] = "repeat",
+	["function"] = "function",
+	["for"] = "for",
+	["false"] = "false",
+	["if"] = "if",
+	["in"] = "in",
+	["do"] = "do",
+	["nil"] = "nil",
+	["not"] = "not",
+	["or"] = "or",
+	["and"] = "and",
+	["break"] = "break",
+	["while"] = "while",
+	["until"] = "until",
 }
 
 local identifierd = {
-	[byte("l")] = true,
-	[byte("e")] = true,
-	[byte("t")] = true,
-	[byte("r")] = true,
-	[byte("f")] = true,
-	[byte("i")] = true,
-	[byte("d")] = true,
-	[byte("n")] = true,
-	[byte("o")] = true,
-	[byte("a")] = true,
-	[byte("b")] = true,
-	[byte("w")] = true,
-	[byte("u")] = true,
+	[vector.create(byte("l"), byte("o"))] = true,
+	[vector.create(byte("e"), byte("n"))] = true,
+	[vector.create(byte("e"), byte("l"))] = true,
+	[vector.create(byte("t"), byte("h"))] = true,
+	[vector.create(byte("t"), byte("r"))] = true,
+	[vector.create(byte("r"), byte("e"))] = true,
+	[vector.create(byte("f"), byte("u"))] = true,
+	[vector.create(byte("f"), byte("o"))] = true,
+	[vector.create(byte("f"), byte("a"))] = true,
+	[vector.create(byte("i"), byte("f"))] = true,
+	[vector.create(byte("i"), byte("n"))] = true,
+	[vector.create(byte("d"), byte("o"))] = true,
+	[vector.create(byte("n"), byte("i"))] = true,
+	[vector.create(byte("n"), byte("o"))] = true,
+	[vector.create(byte("o"), byte("r"))] = true,
+	[vector.create(byte("a"), byte("n"))] = true,
+	[vector.create(byte("b"), byte("r"))] = true,
+	[vector.create(byte("w"), byte("h"))] = true,
+	[vector.create(byte("u"), byte("n"))] = true,
 }
 
 local function identifier(): string
-	local d = first
+	local d = vector.create(first, second)
 	local start = pos
 	
 	repeat
@@ -307,7 +309,7 @@ local function identifier(): string
 
 	if identifierd[d] then
 		local text = buffer.readstring(buf, start, pos - start)
-		return if identifiers[text] then text else "identifier"
+		return identifiers[text] or "identifier"
 	else
 		return "identifier"
 	end
