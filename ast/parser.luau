@@ -581,7 +581,7 @@ local function parse_function_type(): ast.Type_Function | ast.Type_Paren
 
 				push(params, { name = name, type = type })
 			else
-				push(params, { type = parse_type() })
+				push(params, { name = nil, type = parse_type() })
 			end
 
 			if current_kind == "," then
@@ -786,7 +786,7 @@ function parse_type_or_type_pack(): ast.Type | ast.TypePack
 
 				push(params, { name = name, type = type })
 			else
-				push(params, { type = parse_type() })
+				push(params, { name = nil, type = parse_type() })
 			end
 
 			if current_kind == "," then
